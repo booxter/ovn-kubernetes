@@ -160,6 +160,13 @@ const (
 
 	// OvnNodeDontSNATSubnets is a user assigned source subnets that should avoid SNAT at ovn-k8s-mp0 interface
 	OvnNodeDontSNATSubnets = "k8s.ovn.org/node-ingress-snat-exclude-subnets"
+
+	// ovnNodeTransportZones is used to indicate which transport (trust) zones a node belongs to.
+	// This is useful to limit formation of VTEPs between nodes that, by design, host mutually isolated
+	// sets of ports and hence don't need interconnectivity.
+	//
+	// Note: This design constraint is enforced by CNI user, not CNI itself.
+	ovnNodeTransportZones = "k8s.ovn.org/transport-zones"
 )
 
 type L3GatewayConfig struct {
@@ -1011,6 +1018,59 @@ func parseNodeEgressIPConfig(egressIPConfig *nodeEgressIPConfiguration) (*Parsed
 // GetNodeEgressLabel returns label annotation needed for marking nodes as egress assignable
 func GetNodeEgressLabel() string {
 	return ovnNodeEgressLabel
+}
+
+func parseAnnotationList(node *corev1.Node, name string, allowEmpty bool) ([]string, error) {
+	value, ok := node.Annotations[name]
+	if !ok {
+		if allowEmpty {
+			return []string{}, nil
+		}
+		return nil, newAnnotationNotSetError("%s annotation not found for node %q", name, node.Name)
+	}
+
+	var result []string
+	if err := json.Unmarshal([]byte(value), &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal annotation %s for node %q: %v",
+			name, node.Name, err)
+	}
+
+	return result, nil
+}
+
+func GetNodeTransportZones(node *corev1.Node) ([]string, error) {
+	return parseAnnotationList(node, ovnNodeTransportZones, true)
+}
+
+func NodeTransportZonesChanged(oldNode, newNode *corev1.Node) bool {
+	return oldNode.Annotations[ovnNodeTransportZones] != newNode.Annotations[ovnNodeTransportZones]
+}
+
+func NodesInSharedTransportZone(node *corev1.Node, other *corev1.Node) (bool, error) {
+	nodeTrustZones, err := GetNodeTransportZones(node)
+
+	if err != nil {
+		return false, fmt.Errorf("failed to get transport zones for a node %s: %v", node.Name, err)
+	}
+
+	otherTrustZones, err := GetNodeTransportZones(other)
+	if err != nil {
+		return false, fmt.Errorf("failed to get transport zones for the other node %s: %v", other.Name, err)
+	}
+
+	// Case 1: implicit membership in a "default" trust zone if no annotation was set.
+	if len(nodeTrustZones) == 0 && len(otherTrustZones) == 0 {
+		return true, nil
+	}
+
+	// Case 2: nodes have intersecting trust zones.
+	sharedTrustZones := sets.New(nodeTrustZones...).Intersection(sets.New(otherTrustZones...))
+	if len(sharedTrustZones) != 0 {
+		return true, nil
+	}
+
+	// Case 3: nodes do not share any trust zones. Bail out.
+	return false, nil
 }
 
 func SetNodeHostCIDRs(nodeAnnotator kube.Annotator, cidrs sets.Set[string]) error {
