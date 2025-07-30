@@ -67,12 +67,14 @@ below criteria:
 #### OVN Constructs created in the databases
 
 OVN Sourthbound Database:
+
 * Port_Binding:encap - Populated by ovn-controller according to VIF
   interface’s external_ids:ovn-encap-ip.
 * Encap:IP - The IP in the corresponding Encap record will be used
   as the VTEP IP.
 
 OVS Database on chassis:
+
 * Each Chassis may have multiple Encaps, determined by
   `open_vswitch:external_ids:ovn-encap-ip` which is a comma separated
   string of IPs.
@@ -90,8 +92,9 @@ This can be accomplished using a system network management tool, such as
 Network Manager.
 
 Assuming a node has 3 NICs and VTEP interfaces:
-| PF       | VTEP  | VTEP IP      |
-| :------- | :---- | :----------- |
+
+| PF       | VTEP  | VTEP IP     |
+| :------- | :---- | :---------- |
 | enp1s0f0 | vtep0 | 10.0.0.1/23 |
 | enp2s0f0 | vtep1 | 10.0.0.2/23 |
 | enp3s0f0 | vtep2 | 10.0.0.3/23 |
@@ -121,10 +124,11 @@ e620a080-c761-44d0-adb3-203bb1df6d67
                 type: internal
 ```
 
-Below Open_vSwitch external_ids need to be configured in osvsdb:
-- `external_ids:ovn-encap-ip`: set it to a list of vtep IPs, separated by
+Below Open_vSwitch external_ids need to be configured in ovsdb:
+
+- `external_ids:ovn-encap-ip`: set it to a list of VTEP IPs, separated by
   commas, in any order.
-- `external_ids:ovn-pf-encap-ip-mapping`: set it to list of vtep-interface
+- `external_ids:ovn-pf-encap-ip-mapping`: set it to a list of VTEP interface
   to IP pairs separated by comma.
 
 For example:
